@@ -104,6 +104,45 @@
     function renderRealOverview(){const rs=filteredRecords(),sums=k=>rs.reduce((a,r)=>a+r[k],0),values=[sums('play'),sums('likes'),sums('follows'),sums('shares')];document.querySelectorAll('#overview .overview-metrics .metric-value').forEach((el,i)=>{if(values[i]!=null)el.textContent=fmt(values[i])});const count=document.querySelector('#overview .table-toolbar h3 small');if(count)count.textContent=`（${rs.length} 条）`;const daily=overviewDailySeries(rs),maxPlay=Math.max(...daily.map(x=>x.value),1),line=document.querySelector('#overview .chart .chart-line'),area=document.querySelector('#overview .chart .chart-area');const points=daily.map((x,i)=>{const px=daily.length<2?52:i/(daily.length-1)*698+52,py=210-(x.value/maxPlay)*185;return `${i?'L':'M'}${px.toFixed(1)} ${Math.max(25,py).toFixed(1)}`}).join(' ');if(line)line.setAttribute('d',points);if(area)area.setAttribute('d',points+' L750 210 L52 210Z');const yAxis=document.getElementById('playYAxis');if(yAxis)yAxis.innerHTML=`<text x="0" y="29">${fmt(maxPlay)}</text><text x="0" y="84">${fmt(maxPlay*.75)}</text><text x="0" y="139">${fmt(maxPlay*.5)}</text><text x="0" y="194">${fmt(maxPlay*.25)}</text><text x="20" y="214">0</text>`;const xAxis=document.getElementById('playXAxis');if(xAxis){const step=Math.max(1,Math.ceil(daily.length/12));xAxis.innerHTML=daily.map((x,i)=>i%step===0||i===daily.length-1?`<text x="${(daily.length<2?52:i/(daily.length-1)*698+52).toFixed(1)}" y="235" text-anchor="middle">${x.date.slice(5)}</text>`:'').join('')}renderVideoRows(rs.slice(0,10))}
     function renderFullDateTrend(){if(!realState.loaded)return;const rs=filteredRecords(),daily=overviewDailySeries(rs),maxPlay=Math.max(...daily.map(x=>x.value),1),line=document.querySelector('#overview .chart .chart-line'),area=document.querySelector('#overview .chart .chart-area');const points=daily.map((x,i)=>{const px=daily.length<2?52:i/(daily.length-1)*698+52,py=210-(x.value/maxPlay)*185;return `${i?'L':'M'}${px.toFixed(1)} ${Math.max(25,py).toFixed(1)}`}).join(' ');if(line)line.setAttribute('d',points);if(area)area.setAttribute('d',points+' L750 210 L52 210Z');const yAxis=document.getElementById('playYAxis');if(yAxis)yAxis.innerHTML=`<text x="0" y="29">${fmt(maxPlay)}</text><text x="0" y="84">${fmt(maxPlay*.75)}</text><text x="0" y="139">${fmt(maxPlay*.5)}</text><text x="0" y="194">${fmt(maxPlay*.25)}</text><text x="20" y="214">0</text>`;const xAxis=document.getElementById('playXAxis');if(xAxis){const step=Math.max(1,Math.ceil(daily.length/12));xAxis.innerHTML=daily.map((x,i)=>i%step===0||i===daily.length-1?`<text x="${(daily.length<2?52:i/(daily.length-1)*698+52).toFixed(1)}" y="235" text-anchor="middle">${x.date.slice(5)}</text>`:'').join('')}}
     document.querySelectorAll('#overview .range button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#overview .range button').forEach(x=>x.classList.remove('active'));b.classList.add('active');setTimeout(renderFullDateTrend,0)});setTimeout(renderFullDateTrend,1200);
+    // Functional video pagination: keep the list usable after real CSV data is loaded.
+    let videoPage=1;
+    const videoPageSize=5;
+    function renderVideoPagination(total){
+      const root=document.querySelector('#overview .pagination');
+      if(!root)return;
+      const pages=Math.max(1,Math.ceil(total/videoPageSize));
+      videoPage=Math.min(videoPage,pages);
+      const start=total?(videoPage-1)*videoPageSize+1:0;
+      const end=total?Math.min(videoPage*videoPageSize,total):0;
+      const items=[];
+      const add=(label,page,disabled=false,active=false)=>items.push(`<button type="button" data-video-page="${page}" ${disabled?'disabled':''} class="${active?'active':''}">${label}</button>`);
+      add('‹',videoPage-1,videoPage===1);
+      const visible=pages<=5?[...Array(pages)].map((_,i)=>i+1):[1,2,3,'…',pages];
+      visible.forEach(page=>page==='…'?items.push('<span style="padding:5px 3px;color:#98a2b3">…</span>'):add(page,page,false,page===videoPage));
+      add('›',videoPage+1,videoPage===pages);
+      root.innerHTML=`<span>显示 ${start}-${end} 条，共 ${total} 条</span><div class="pages">${items.join('')}</div>`;
+    }
+    function renderVideoRows(_rows){
+      const all=filteredRecords();
+      const input=document.querySelector('#overview .table-toolbar .search');
+      const query=(input?.value||'').trim().toLowerCase();
+      const rows=query?all.filter(r=>`${r.title} ${r.account}`.toLowerCase().includes(query)):all;
+      const pages=Math.max(1,Math.ceil(rows.length/videoPageSize));
+      videoPage=Math.min(videoPage,pages);
+      const visible=rows.slice((videoPage-1)*videoPageSize,videoPage*videoPageSize);
+      const target=document.getElementById('videoRows');
+      if(!target)return;
+      target.innerHTML=visible.map(r=>`<tr class="video-row"><td class="title-cell">${r.title}</td><td>${r.account}</td><td>${fmt(r.play)}</td><td>${fmt(r.likes)}</td><td>${fmt(r.comments)}</td><td>${fmt(r.shares)}</td><td><span class="pill">${r.finish.toFixed(1)}%</span></td><td>${r.date}</td></tr>`).join('')||'<tr><td colspan="8" style="text-align:center;color:#8491aa;padding:30px">当前筛选条件下暂无数据</td></tr>';
+      renderVideoPagination(rows.length);
+    }
+    document.addEventListener('click',e=>{
+      const button=e.target.closest('#overview .pages button[data-video-page]');
+      if(!button||button.disabled)return;
+      e.preventDefault();
+      videoPage=Number(button.dataset.videoPage)||1;
+      renderVideoRows(filteredRecords());
+    });
+    document.querySelector('#overview .table-toolbar .search')?.addEventListener('input',()=>{videoPage=1;renderVideoRows(filteredRecords())});
   </script>
 </body>
 </html>
